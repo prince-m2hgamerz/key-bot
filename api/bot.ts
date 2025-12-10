@@ -22,10 +22,10 @@ const bot = new Telegraf(BOT_TOKEN);
 const isAdmin = (id: number) => id === ADMIN_ID;
 
 /**
- * Escapes Markdown V2 characters in a string to prevent "Can't parse entities" errors.
+ * Escapes Markdown V2 characters in a string to prevent "Can't parse entities" errors,
+ * especially when displaying user-provided content like keys.
  */
 const escapeMarkdown = (text: string): string => {
-    // This function is crucial for preventing the 400 error when displaying user-provided keys.
     return text
         .replace(/_/g, '\\_')
         .replace(/\*/g, '\\*')
@@ -58,7 +58,7 @@ bot.start(async (ctx) => {
         return ctx.reply("⛔ You have been banned from using this bot.");
     }
     
-    // Referral Check (Logic remains the same)
+    // Referral Check 
     const message = ctx.message.text;
     const match = message.match(/\/start ref_(\d+)/);
     
@@ -80,7 +80,7 @@ bot.start(async (ctx) => {
     ctx.reply(`Welcome ${ctx.from.first_name}! Use the buttons below to manage keys.`, menu);
 });
 
-// --- NEW COMMAND: /admin (Switches to Admin Keyboard) ---
+// --- Command to switch to Admin Keyboard ---
 bot.command('admin', (ctx) => {
     if (isAdmin(ctx.from.id)) {
         ctx.reply("Switched to Admin Menu. Use the '/adminhelp' button for commands.", adminMenu);
@@ -89,12 +89,12 @@ bot.command('admin', (ctx) => {
     }
 });
 
-// --- UPDATED: User Help Button Handler ---
+// --- User Help Button Handler ---
 bot.hears('❓ User Help', async (ctx) => {
     const user = await db.getUser(ctx.from.id);
     if (user.is_banned) return ctx.reply("⛔ Action denied. You are banned.");
 
-    // FIXED: Cleaned Message format for Markdown safety
+    // Fixed message format for Markdown safety
     const helpMessage = 
 `**🤖 User Help & Information**
 
@@ -110,18 +110,10 @@ If you have technical issues, please contact the admin via the 'Add Fund' option
     ctx.replyWithMarkdown(helpMessage, mainMenu);
 });
 
-// --- FIXED: Add Fund Button Handler ---
+// --- FINAL FIX: Add Fund Button Handler ---
 bot.hears('💰 Add Fund', (ctx) => {
-    // FIXED: Cleaned Message format for Markdown safety
-    const msg = 
-`**💰 Fund Addition**
-
-To add funds to your account, please contact the administrator:
-
-👤 *Username*: @${ADMIN_USERNAME}
-🆔 *Chat ID*: \`${ADMIN_ID}\`
-
-Send them the payment details, and they will manually update your balance using the Chat ID above.`;
+    // FIXED: Using a simplified, single-line-style structure for maximum Markdown compatibility.
+    const msg = `**💰 Fund Addition**\n\nTo add funds to your account, please contact the administrator:\n\n👤 *Username*: @${ADMIN_USERNAME}\n🆔 *Chat ID*: \`${ADMIN_ID}\`\n\nSend them the payment details, and they will manually update your balance using the Chat ID above.`;
     
     ctx.replyWithMarkdown(msg);
 });
@@ -258,13 +250,13 @@ bot.action(/buy_(.+)_(.+)/, async (ctx) => {
 
 // --- ADMIN COMMANDS ---
 
-// --- FIXED: Admin Help Command Handler (Only Admin Access) ---
+// --- Admin Help Command Handler (Only Admin Access) ---
 bot.command('adminhelp', (ctx) => {
     if (!isAdmin(ctx.from.id)) {
         return ctx.reply("❌ Access denied. This command is for administrators only.");
     }
     
-    // FIXED: Cleaned Message format for Markdown safety
+    // Fixed message format for Markdown safety
     const adminHelpMessage = 
 `👮 **ADMIN MENU COMMANDS**
 
