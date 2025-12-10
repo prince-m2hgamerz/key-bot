@@ -23,7 +23,7 @@ const isAdmin = (id: number) => id === ADMIN_ID;
 
 /**
  * Escapes Markdown V2 characters in a string to prevent "Can't parse entities" errors,
- * especially when displaying user-provided content like keys.
+ * especially when displaying user-provided content like keys in non-code-block areas.
  */
 const escapeMarkdown = (text: string): string => {
     return text
@@ -94,7 +94,7 @@ bot.hears('❓ User Help', async (ctx) => {
     const user = await db.getUser(ctx.from.id);
     if (user.is_banned) return ctx.reply("⛔ Action denied. You are banned.");
 
-    // This section remains Markdown as it is confirmed working and is purely bot-generated
+    // This section is Markdown and confirmed working
     const helpMessage = 
 `**🤖 User Help & Information**
 
@@ -110,11 +110,11 @@ If you have technical issues, please contact the admin via the 'Add Fund' option
     ctx.replyWithMarkdown(helpMessage, mainMenu);
 });
 
-// --- FIXED: Add Fund Button Handler (Corrected Content) ---
+// --- FIXED: Add Fund Button Handler (Plain Text & Correct Content) ---
 bot.hears('💰 Add Fund', (ctx) => {
     const userId = ctx.from.id; // User's ID is required for the Admin to apply the credit
 
-    // Content FIX: Showing the user's Chat ID and only the Admin's Username for contact.
+    // FIX: Switched to ctx.reply() and simplified content to avoid 400 error and confusion
     const msg = 
 `Fund Addition
 
@@ -122,7 +122,7 @@ To add funds to your account, please contact the administrator:
 
 Username: @${ADMIN_USERNAME}
 
-Send them the payment details and **your Chat ID** (which is: ${userId}).
+Send them the payment details and your Chat ID (which is: ${userId}).
 The administrator will manually update your balance using your Chat ID.`;
     
     ctx.reply(msg); // Keeping ctx.reply() to avoid the 400 Markdown error.
@@ -242,9 +242,10 @@ bot.action(/buy_(.+)_(.+)/, async (ctx) => {
                     price: price
                 });
 
-                const safeKeyContent = escapeMarkdown(key.content);
+                // --- FIX APPLIED HERE: Do NOT escape key.content, as it is inside code block ticks ---
+                const keyContent = key.content; 
                 
-                await ctx.replyWithMarkdown(`✅ **Purchase Successful!**\n\nGame: ${game}\nDuration: ${duration}\n\nKey:\n\`${safeKeyContent}\``);
+                await ctx.replyWithMarkdown(`✅ **Purchase Successful!**\n\nGame: ${game}\nDuration: ${duration}\n\nKey:\n\`${keyContent}\``);
                 ctx.answerCbQuery("Purchase successful!");
             } else {
                 await db.addBalance(userId, price); 
@@ -297,7 +298,8 @@ bot.command('searchkey', async (ctx) => {
 
         if (key) {
             const status = key.used ? '🔴 USED' : '🟢 AVAILABLE';
-            const safeKeyContent = escapeMarkdown(key.content);
+            // Escaping is required here because the key is NOT inside a code block
+            const safeKeyContent = escapeMarkdown(key.content); 
 
             ctx.replyWithMarkdown(
                 `🔎 **Key Found!**\n` +
