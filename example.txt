@@ -1,0 +1,156 @@
+Skip to content
+m2hgamerz
+m2hgamerz
+
+Hobby
+
+Find…
+F
+
+
+Get started with Supabase
+Support
+Documentation
+EULA
+Privacy Policy
+Website
+Installing into
+
+
+m2hgamerz
+
+Create Database
+Set up your new Supabase Database, powered by
+
+Supabase
+
+Primary Region (required)
+Washington, D.C., USA (East)
+Primary region where your database will be hosted
+
+Public Environment Variables Prefix
+NEXT_PUBLIC_
+Prefix appended to environment variables that are available on the client side. eg. `NEXT_PUBLIC_` or `VITE_PUBLIC_`. Defaults to `NEXT_PUBLIC_`.
+
+Installation Plans
+
+Supabase Pro Plan
+
+Dedicated CPU • 1 GB RAM • 100K MAU • 8 GB database space • 250 GB bandwidth • 100 GB file storage
+
+
+Supabase Team Plan
+
+SOC2 • SSO for Supabase Dashboard • Priority email support & SLAs • 28-day log retention
+
+
+Supabase Free Plan
+
+Unlimited API requests • Shared CPU • 500 MB RAM • 50K MAU • 500 MB database space • 5 GB bandwidth • 1 GB file storage
+
+
+Home
+Docs
+Knowledge Base
+Academy
+Help
+Contact
+All systems normal.
+
+Select a display theme:
+
+system
+
+light
+
+dark
+Supabase - Checkout
+08:27:50
+10
+
+
+Skip to content
+m2hgamerz
+m2hgamerz
+
+Hobby
+
+Find…
+F
+
+
+Get started with Supabase
+Support
+Documentation
+EULA
+Privacy Policy
+Website
+Installing into
+
+
+m2hgamerz
+
+Create Database
+Set up your new Supabase Database, powered by
+
+Supabase
+
+Database Name (*)
+key-bot
+7/128
+
+This is how we call your Database in the Vercel dashboard and in Supabase.
+
+Your Selection
+
+Parameters
+
+Primary Region
+
+Washington, D.C., USA (East)
+
+iad1
+
+Public Environment Variables Prefix
+
+NEXT_PUBLIC_
+
+Supabase Free Plan
+
+Unlimited API requests • Shared CPU • 500 MB RAM • 50K MAU • 500 MB database space • 5 GB bandwidth • 1 GB file storage
+
+Home
+Docs
+Knowledge Base
+Academy
+Help
+Contact
+All systems normal.
+
+Select a display theme:
+
+system
+
+light
+
+dark
+Supabase - Checkout
+08:27:50
+10
+
+NEXT_PUBLIC_SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVsYWFidHNkY2dnYW1qZnFudnZkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjUzMjY3MjIsImV4cCI6MjA4MDkwMjcyMn0.jfmXVlZLcCrlyB-MQ2c6bBt-QNR1yi4grlhAEPEyOKk"
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY="sb_publishable_hOvb87rkWm3gZKYA0P3-tQ_0iDzgvw_"
+NEXT_PUBLIC_SUPABASE_URL="https://elaabtsdcggamjfqnvvd.supabase.co"
+POSTGRES_DATABASE="postgres"
+POSTGRES_HOST="db.elaabtsdcggamjfqnvvd.supabase.co"
+POSTGRES_PASSWORD="XDwTIaXJRZPLwgAz"
+POSTGRES_PRISMA_URL="postgres://postgres.elaabtsdcggamjfqnvvd:XDwTIaXJRZPLwgAz@aws-1-us-east-1.pooler.supabase.com:6543/postgres?sslmode=require&pgbouncer=true"
+POSTGRES_URL="postgres://postgres.elaabtsdcggamjfqnvvd:XDwTIaXJRZPLwgAz@aws-1-us-east-1.pooler.supabase.com:6543/postgres?sslmode=require&supa=base-pooler.x"
+POSTGRES_URL_NON_POOLING="postgres://postgres.elaabtsdcggamjfqnvvd:XDwTIaXJRZPLwgAz@aws-1-us-east-1.pooler.supabase.com:5432/postgres?sslmode=require"
+POSTGRES_USER="postgres"
+SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVsYWFidHNkY2dnYW1qZnFudnZkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjUzMjY3MjIsImV4cCI6MjA4MDkwMjcyMn0.jfmXVlZLcCrlyB-MQ2c6bBt-QNR1yi4grlhAEPEyOKk"
+SUPABASE_JWT_SECRET="VbEwWcIYpzAgfoHlDLDjyxIBwbw+QDkkRNy4gHUacqlPnKJybhHgt13d2u9KzjwFukS0gRgr2kgrA5LV75hXkg=="
+SUPABASE_PUBLISHABLE_KEY="sb_publishable_hOvb87rkWm3gZKYA0P3-tQ_0iDzgvw_"
+SUPABASE_SECRET_KEY="sb_secret_BiAFJRyEUW8fIIkV_WkyXg_LXbkDICr"
+SUPABASE_SERVICE_ROLE_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVsYWFidHNkY2dnYW1qZnFudnZkIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2NTMyNjcyMiwiZXhwIjoyMDgwOTAyNzIyfQ.MYHczSv6eW-tWdlqZq5CpzgZujicqg-0Huiah10evRY"
+SUPABASE_URL="https://elaabtsdcggamjfqnvvd.supabase.co"

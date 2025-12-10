@@ -9,22 +9,18 @@ export interface Key {
 }
 
 export interface PurchaseRecord {
-    keyId: string;
+    id?: number;
+    user_id: number;
+    key_id: string;
     game: string;
     duration: string;
     price: number;
-    timestamp: number;
+    timestamp?: string; // Supabase returns a string
 }
 
 export interface UserData {
     id: number;
     balance: number;
     username?: string;
-    purchaseHistory: PurchaseRecord[];
-    referredBy?: number; // Added for referral tracking
-}
-
-export interface DBContent {
-    users: Record<number, UserData>;
-    keys: Key[];
+    referred_by?: number;
 }

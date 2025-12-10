@@ -18,8 +18,8 @@ export const PRICES: Record<string, number> = {
 
 // Keyboards
 export const mainMenu = Markup.keyboard([
-    ['🔑 Buy Key', '📦 Key Stock', '📄 History'], // Added History
-    ['💰 Add Fund', '👤 Profile', '🎁 Referral'] // Added Referral/Fund
+    ['🔑 Buy Key', '📦 Key Stock', '📄 History'],
+    ['💰 Add Fund', '👤 Profile', '🎁 Referral']
 ]).resize();
 
 export const gameSelectionKeyboard = Markup.inlineKeyboard([

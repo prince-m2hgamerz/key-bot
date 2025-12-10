@@ -1,128 +1,171 @@
 // src/database.ts
 
-import * as fs from 'fs';
-import * as path from 'path';
-import { Key, UserData, DBContent, PurchaseRecord } from './types';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { Key, UserData, PurchaseRecord } from './types';
 
-// Vercel deployment uses process.env.DATABASE_PATH defined in vercel.json
-const DB_FILE_PATH = path.join(process.cwd(), process.env.DATABASE_PATH || 'data/db.json');
+// Initialize Supabase Client
+const supabase: SupabaseClient = createClient(
+    process.env.SUPABASE_URL || '',
+    process.env.SUPABASE_ANON_KEY || ''
+);
 
-class JSONDatabase {
-    private data: DBContent;
-
-    constructor() {
-        this.data = this.loadData();
-    }
-
-    private loadData(): DBContent {
-        try {
-            if (!fs.existsSync(DB_FILE_PATH)) {
-                // Initialize default structure if file does not exist
-                const initialData: DBContent = { users: {}, keys: [] };
-                fs.writeFileSync(DB_FILE_PATH, JSON.stringify(initialData, null, 2), 'utf8');
-                return initialData;
-            }
-            const fileContent = fs.readFileSync(DB_FILE_PATH, 'utf8');
-            return JSON.parse(fileContent);
-        } catch (e) {
-            console.error("Error loading/creating DB, returning default structure.", e);
-            return { users: {}, keys: [] };
-        }
-    }
-
-    public saveData(): void {
-        fs.writeFileSync(DB_FILE_PATH, JSON.stringify(this.data, null, 2), 'utf8');
-    }
+class SupabaseDatabase {
 
     // --- User Methods ---
-    getUser(id: number): UserData {
-        if (!this.data.users[id]) {
-            // Initialize new user with default values
-            this.data.users[id] = { 
-                id, 
-                balance: 0, 
-                purchaseHistory: [] 
-            };
-            this.saveData();
+
+    /**
+     * Fetches a user or creates a new one if not found.
+     */
+    async getUser(id: number): Promise<UserData> {
+        const { data, error } = await supabase
+            .from('users')
+            .select('*')
+            .eq('id', id)
+            .single();
+
+        if (error && error.code === 'PGRST116') { // Not found
+            const newUserData: UserData = { id, balance: 0 };
+            const { data: newData, error: insertError } = await supabase
+                .from('users')
+                .insert([newUserData])
+                .select()
+                .single();
+            
+            if (insertError) throw insertError;
+            return newData as UserData;
         }
-        return this.data.users[id];
+        if (error) throw error;
+        return data as UserData;
     }
 
-    addBalance(id: number, amount: number) {
-        const user = this.getUser(id); 
-        user.balance += amount;
-        this.saveData();
+    /**
+     * Updates only the balance or referred_by field.
+     */
+    async updateUser(id: number, updates: Partial<UserData>): Promise<void> {
+        const { error } = await supabase
+            .from('users')
+            .update(updates)
+            .eq('id', id);
+        if (error) throw error;
     }
 
-    deductBalance(id: number, amount: number): boolean {
-        const user = this.data.users[id];
-        if (user && user.balance >= amount) {
-            user.balance -= amount;
-            this.saveData();
+    async addBalance(id: number, amount: number): Promise<void> {
+        const user = await this.getUser(id);
+        const newBalance = user.balance + amount;
+        await this.updateUser(id, { balance: newBalance });
+    }
+
+    async deductBalance(id: number, amount: number): Promise<boolean> {
+        const user = await this.getUser(id);
+        if (user.balance >= amount) {
+            const newBalance = user.balance - amount;
+            await this.updateUser(id, { balance: newBalance });
             return true;
         }
         return false;
     }
+    
+    // --- Purchase History Methods ---
 
-    logPurchase(userId: number, key: Key, price: number): void {
-        const user = this.data.users[userId];
-        if (user) {
-            user.purchaseHistory.push({
-                keyId: key.id,
-                game: key.game,
-                duration: key.duration,
-                price: price,
-                timestamp: Date.now()
-            });
-            this.saveData();
-        }
+    async logPurchase(record: Omit<PurchaseRecord, 'id' | 'timestamp'>): Promise<void> {
+        const { error } = await supabase
+            .from('purchase_history')
+            .insert([record]);
+        if (error) throw error;
+    }
+
+    async getPurchaseHistory(userId: number, limit: number = 5): Promise<PurchaseRecord[]> {
+        const { data, error } = await supabase
+            .from('purchase_history')
+            .select('*')
+            .eq('user_id', userId)
+            .order('timestamp', { ascending: false })
+            .limit(limit);
+        
+        if (error) throw error;
+        return data as PurchaseRecord[];
     }
 
     // --- Key Methods ---
-    addKey(game: string, duration: string, content: string) {
-        this.data.keys.push({
+
+    async addKey(game: string, duration: string, content: string): Promise<void> {
+        const key: Key = {
             id: Math.random().toString(36).substr(2, 9),
             content,
             game,
             duration,
             used: false
-        });
-        this.saveData();
+        };
+        const { error } = await supabase
+            .from('keys')
+            .insert([key]);
+        if (error) throw error;
     }
 
-    getAvailableKeyCount(game: string, duration: string): number {
-        return this.data.keys.filter(k => k.game === game && k.duration === duration && !k.used).length;
+    async getAvailableKeyCount(game: string, duration: string): Promise<number> {
+        const { count, error } = await supabase
+            .from('keys')
+            .select('*', { count: 'exact', head: true })
+            .eq('game', game)
+            .eq('duration', duration)
+            .eq('used', false);
+        
+        if (error) throw error;
+        return count || 0;
     }
 
-    fetchAndMarkKey(game: string, duration: string): Key | null {
-        const keyIndex = this.data.keys.findIndex(k => k.game === game && k.duration === duration && !k.used);
-        if (keyIndex > -1) {
-            this.data.keys[keyIndex].used = true;
-            this.saveData();
-            return this.data.keys[keyIndex];
-        }
-        return null;
+    async fetchAndMarkKey(game: string, duration: string): Promise<Key | null> {
+        // 1. Fetch one unused key
+        const { data: keyData, error: fetchError } = await supabase
+            .from('keys')
+            .select('*')
+            .eq('game', game)
+            .eq('duration', duration)
+            .eq('used', false)
+            .limit(1)
+            .single();
+
+        if (fetchError || !keyData) return null;
+
+        // 2. Mark it as used
+        const { error: updateError } = await supabase
+            .from('keys')
+            .update({ used: true })
+            .eq('id', keyData.id);
+
+        if (updateError) throw updateError;
+        
+        return keyData as Key;
     }
 
     // --- Reporting ---
-    getStockReport(): string {
-        // ... (No change to stock report logic)
-        const games = [...new Set(this.data.keys.map(k => k.game))];
-        if (games.length === 0) return "No keys initialized.";
+
+    async getStockReport(): Promise<string> {
+        const { data: keys, error } = await supabase
+            .from('keys')
+            .select('game, duration, used');
+        
+        if (error) throw error;
+
+        const stockMap = new Map<string, number>();
+
+        (keys as Pick<Key, 'game'|'duration'|'used'>[]).forEach(key => {
+            if (!key.used) {
+                const keyId = `${key.game}:${key.duration}`;
+                stockMap.set(keyId, (stockMap.get(keyId) || 0) + 1);
+            }
+        });
+
+        if (stockMap.size === 0) return "No keys initialized or all are used.";
 
         let report = "Stock:\n";
         
-        games.forEach(game => {
-            report += `\n**${game}:**\n`;
-            const durations = [...new Set(this.data.keys.filter(k => k.game === game).map(k => k.duration))];
-            
-            durations.forEach(dur => {
-                const count = this.getAvailableKeyCount(game, dur);
-                report += `-${dur}: ${count} keys\n`;
-            });
-        });
+        for (const [keyId, count] of stockMap.entries()) {
+            const [game, dur] = keyId.split(':');
+            report += `\n**${game}** (${dur}): ${count} keys\n`;
+        }
         return report;
     }
 }
 
-export const db = new JSONDatabase();
+export const db = new SupabaseDatabase();

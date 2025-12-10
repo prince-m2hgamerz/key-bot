@@ -6,6 +6,7 @@
     "start": "ts-node api/bot.ts"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.87.1",
     "@vercel/node": "^2.3.0",
     "dotenv": "^16.3.1",
     "telegraf": "^4.15.3"
