@@ -110,20 +110,22 @@ If you have technical issues, please contact the admin via the 'Add Fund' option
     ctx.replyWithMarkdown(helpMessage, mainMenu);
 });
 
-// --- FINAL FIX: Add Fund Button Handler (Switched to Plain Text) ---
+// --- FIXED: Add Fund Button Handler (Corrected Content) ---
 bot.hears('💰 Add Fund', (ctx) => {
-    // FIX: Switched to ctx.reply() to send PLAIN TEXT, completely bypassing the Markdown parser.
+    const userId = ctx.from.id; // User's ID is required for the Admin to apply the credit
+
+    // Content FIX: Showing the user's Chat ID and only the Admin's Username for contact.
     const msg = 
 `Fund Addition
 
 To add funds to your account, please contact the administrator:
 
 Username: @${ADMIN_USERNAME}
-Chat ID: ${ADMIN_ID}
 
-Send them the payment details, and they will manually update your balance using the Chat ID above.`;
+Send them the payment details and **your Chat ID** (which is: ${userId}).
+The administrator will manually update your balance using your Chat ID.`;
     
-    ctx.reply(msg); // <--- Key Change: Using ctx.reply
+    ctx.reply(msg); // Keeping ctx.reply() to avoid the 400 Markdown error.
 });
 
 bot.hears('📦 Key Stock', async (ctx) => {
@@ -258,7 +260,7 @@ bot.action(/buy_(.+)_(.+)/, async (ctx) => {
 
 // --- ADMIN COMMANDS ---
 
-// --- Admin Help Command Handler (Confirmed working, keeping Markdown) ---
+// --- Admin Help Command Handler ---
 bot.command('adminhelp', (ctx) => {
     if (!isAdmin(ctx.from.id)) {
         return ctx.reply("❌ Access denied. This command is for administrators only.");
