@@ -6,7 +6,7 @@
     "start": "ts-node api/bot.ts"
   },
   "dependencies": {
-    "@vercel/node": "^3.0.12",
+    "@vercel/node": "^2.3.0",
     "dotenv": "^16.3.1",
     "telegraf": "^4.15.3"
   },
