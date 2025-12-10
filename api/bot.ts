@@ -25,6 +25,7 @@ const isAdmin = (id: number) => id === ADMIN_ID;
  * Escapes Markdown V2 characters in a string to prevent "Can't parse entities" errors.
  */
 const escapeMarkdown = (text: string): string => {
+    // This function is crucial for preventing the 400 error when displaying user-provided keys.
     return text
         .replace(/_/g, '\\_')
         .replace(/\*/g, '\\*')
@@ -62,7 +63,6 @@ bot.start(async (ctx) => {
     const match = message.match(/\/start ref_(\d+)/);
     
     if (match) {
-        // ... [Referral processing logic] ...
         const referrerId = parseInt(match[1]);
         if (referrerId !== userId && (user.referred_by === undefined || user.referred_by === null)) { 
             await db.addBalance(referrerId, REFERRAL_BONUS);
@@ -76,7 +76,6 @@ bot.start(async (ctx) => {
         }
     }
     
-    // Check if the user is the admin and set the correct menu
     const menu = isAdmin(userId) ? adminMenu : mainMenu;
     ctx.reply(`Welcome ${ctx.from.first_name}! Use the buttons below to manage keys.`, menu);
 });
@@ -95,19 +94,36 @@ bot.hears('❓ User Help', async (ctx) => {
     const user = await db.getUser(ctx.from.id);
     if (user.is_banned) return ctx.reply("⛔ Action denied. You are banned.");
 
-    const helpMessage = `
-**🤖 User Help & Information**
+    // FIXED: Cleaned Message format for Markdown safety
+    const helpMessage = 
+`**🤖 User Help & Information**
 
-🔑 **Buy Key**: Browse available games and key durations.
-📦 **Key Stock**: See the current count of all available keys.
-📄 **History**: View your last 5 purchase records.
-💰 **Add Fund**: Shows admin contact info for manual funding.
-👤 **Profile**: View your ID, Balance, and Referral status.
-🎁 **Referral**: Get your link to earn bonuses by inviting new users.
+*🔑 Buy Key*: Browse available games and key durations.
+*📦 Key Stock*: See the current count of all available keys.
+*📄 History*: View your last 5 purchase records.
+*💰 Add Fund*: Shows admin contact info for manual funding.
+*👤 Profile*: View your ID, Balance, and Referral status.
+*🎁 Referral*: Get your link to earn bonuses by inviting new users.
 
-If you have technical issues, please contact the admin via the 'Add Fund' option.
-    `;
+If you have technical issues, please contact the admin via the 'Add Fund' option.`;
+    
     ctx.replyWithMarkdown(helpMessage, mainMenu);
+});
+
+// --- FIXED: Add Fund Button Handler ---
+bot.hears('💰 Add Fund', (ctx) => {
+    // FIXED: Cleaned Message format for Markdown safety
+    const msg = 
+`**💰 Fund Addition**
+
+To add funds to your account, please contact the administrator:
+
+👤 *Username*: @${ADMIN_USERNAME}
+🆔 *Chat ID*: \`${ADMIN_ID}\`
+
+Send them the payment details, and they will manually update your balance using the Chat ID above.`;
+    
+    ctx.replyWithMarkdown(msg);
 });
 
 bot.hears('📦 Key Stock', async (ctx) => {
@@ -133,21 +149,6 @@ bot.hears('👤 Profile', async (ctx) => {
         ctx.reply("❌ Error fetching profile data.");
         console.error(e);
     }
-});
-
-// --- UPDATED FEATURE: Add Fund Message (No Change, already fixed) ---
-bot.hears('💰 Add Fund', (ctx) => {
-    const msg = `
-**💰 Fund Addition**
-
-To add funds to your account, please contact the administrator:
-
-👤 **Username:** @${ADMIN_USERNAME}
-🆔 **Chat ID:** \`${ADMIN_ID}\`
-
-Send them the payment details, and they will manually update your balance using the Chat ID above.
-    `;
-    ctx.replyWithMarkdown(msg);
 });
 
 bot.hears('🎁 Referral', async (ctx) => {
@@ -188,7 +189,7 @@ bot.hears('📄 History', async (ctx) => {
     }
 });
 
-// --- BUY FLOW (No Functional Change, includes ban check) ---
+// --- BUY FLOW ---
 bot.hears('🔑 Buy Key', async (ctx) => {
     const user = await db.getUser(ctx.from.id);
     if (user.is_banned) return ctx.reply("⛔ Action denied. You are banned.");
@@ -218,7 +219,6 @@ bot.action(/buy_(.+)_(.+)/, async (ctx) => {
         const user = await db.getUser(userId);
         if (user.is_banned) return ctx.answerCbQuery("⛔ Purchase denied. You are banned.", { show_alert: true });
 
-        // ... [Balance and Stock checks] ...
         const stock = await db.getAvailableKeyCount(game, duration);
 
         if (stock <= 0) {
@@ -264,19 +264,20 @@ bot.command('adminhelp', (ctx) => {
         return ctx.reply("❌ Access denied. This command is for administrators only.");
     }
     
-    const adminHelpMessage = `
-👮 **ADMIN MENU COMMANDS**
--------------------------------
+    // FIXED: Cleaned Message format for Markdown safety
+    const adminHelpMessage = 
+`👮 **ADMIN MENU COMMANDS**
+
 **Inventory Management:**
-/addkey <game> <duration> <key\_content> - Add one key.
-*Send a **.txt file*** (\`game|duration|key\`) - Bulk add keys.
-/searchkey <key\_content> - Search DB for status of a specific key. 
+/addkey <game> <duration> <key\\_content>
+_Bulk Upload:_ Send a *.txt file* (\`game|duration|key\`)
+/searchkey <key\\_content>
 
 **User Management:**
-/addbalance <user\_id> <amount> - Add funds to a user.
-/ban <user\_id> - Ban a user from using the bot.
-/unban <user\_id> - Unban a previously banned user.
-    `;
+/addbalance <user\\_id> <amount>
+/ban <user\\_id>
+/unban <user\\_id>`;
+    
     ctx.replyWithMarkdown(adminHelpMessage, adminMenu);
 });
 
@@ -435,13 +436,13 @@ bot.on('document', async (ctx) => {
 // --- VERCEL HANDLER ---
 export default async (req: VercelRequest, res: VercelResponse) => {
     if (req.method !== 'POST' || !req.body) {
-        res.status(200).send('OK'); 
+        res.status(200).send('ALL SERVERS ARE LIVE | DEV : @m2hgamerz'); 
         return;
     }
     
     try {
         await bot.handleUpdate(req.body);
-        res.status(200).send('OK');
+        res.status(200).send('ALL SERVERS ARE LIVE | DEV : @m2hgamerz');
     } catch (e) {
         console.error('Webhook Error:', e);
         res.status(500).send('Error');
