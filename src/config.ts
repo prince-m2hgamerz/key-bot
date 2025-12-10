@@ -7,6 +7,7 @@ dotenv.config();
 export const REFERRAL_BONUS = 50; // $50 bonus for the referrer
 
 export const ADMIN_ID = parseInt(process.env.ADMIN_ID || '0');
+export const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin_user'; // ADD THIS LINE (Must be set in .env)
 
 export const PRICES: Record<string, number> = {
     '1-day': 100,
@@ -19,7 +20,8 @@ export const PRICES: Record<string, number> = {
 // Keyboards
 export const mainMenu = Markup.keyboard([
     ['🔑 Buy Key', '📦 Key Stock', '📄 History'],
-    ['💰 Add Fund', '👤 Profile', '🎁 Referral']
+    ['💰 Add Fund', '👤 Profile', '🎁 Referral'],
+    ['❓ Help'] // <--- NEW BUTTON
 ]).resize();
 
 export const gameSelectionKeyboard = Markup.inlineKeyboard([

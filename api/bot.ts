@@ -5,6 +5,7 @@ import { VercelRequest, VercelResponse } from '@vercel/node';
 import { db } from '../src/database';
 import { 
     ADMIN_ID, 
+    ADMIN_USERNAME, // <--- NEW
     PRICES, 
     REFERRAL_BONUS,
     mainMenu, 
@@ -24,32 +25,24 @@ const isAdmin = (id: number) => id === ADMIN_ID;
 
 bot.start(async (ctx) => {
     const userId = ctx.from.id;
-    const user = await db.getUser(userId); // Ensure user is initialized
+    const user = await db.getUser(userId); 
 
-    const message = ctx.message.text;
+    if (user.is_banned) { // Check ban status on start
+        return ctx.reply("⛔ You have been banned from using this bot.");
+    }
     
     // Referral Check (Deep-linking: /start ref_123456)
+    const message = ctx.message.text;
     const match = message.match(/\/start ref_(\d+)/);
     
     if (match) {
         const referrerId = parseInt(match[1]);
-        
-        if (referrerId === userId) {
-            return ctx.reply("You cannot refer yourself!", mainMenu);
-        }
-
-        // Only process referral if user is new AND has not been referred before
-        if (user.referred_by === undefined || user.referred_by === null) { 
-            
-            // 1. Give bonus to referrer
+        if (referrerId !== userId && (user.referred_by === undefined || user.referred_by === null)) { 
             await db.addBalance(referrerId, REFERRAL_BONUS);
-            
-            // 2. Link the new user
             await db.updateUser(userId, { referred_by: referrerId });
 
             await ctx.replyWithMarkdown(`🎉 You were referred by user \`${referrerId}\`! User \`${referrerId}\` received a **${REFERRAL_BONUS}$** bonus.`, mainMenu);
             
-            // Notify the referrer 
             ctx.telegram.sendMessage(referrerId, `🥳 Your referral (User ID: ${userId}) just joined! You received a **${REFERRAL_BONUS}$** bonus!`).catch(e => console.error("Could not notify referrer:", e));
             
             return;
@@ -59,8 +52,28 @@ bot.start(async (ctx) => {
     ctx.reply(`Welcome ${ctx.from.first_name}! Use the buttons below to manage keys.`, mainMenu);
 });
 
+// --- NEW FEATURE: Help Button ---
+bot.hears('❓ Help', (ctx) => {
+    const helpMessage = `
+**Bot Help & Information**
+
+🔑 **Buy Key**: Browse available games and key durations.
+📦 **Key Stock**: See the current count of all available keys.
+📄 **History**: View your last 5 purchase records.
+💰 **Add Fund**: Shows admin contact info for manual funding.
+👤 **Profile**: View your ID, Balance, and Referral status.
+🎁 **Referral**: Get your link to earn bonuses by inviting new users.
+
+If you have technical issues, please contact the admin.
+    `;
+    ctx.replyWithMarkdown(helpMessage, mainMenu);
+});
+
 bot.hears('📦 Key Stock', async (ctx) => {
     try {
+        const user = await db.getUser(ctx.from.id);
+        if (user.is_banned) return ctx.reply("⛔ Action denied. You are banned.");
+        
         const stockMsg = await db.getStockReport();
         const timestamp = new Date().toLocaleTimeString();
         ctx.reply(`Check stock ${timestamp}\n${stockMsg}`, { parse_mode: 'Markdown' });
@@ -73,19 +86,33 @@ bot.hears('📦 Key Stock', async (ctx) => {
 bot.hears('👤 Profile', async (ctx) => {
     try {
         const user = await db.getUser(ctx.from.id);
-        ctx.reply(`🆔 ID: \`${user.id}\`\n💰 Balance: **${user.balance}$**\n🔗 Referred By: ${user.referred_by || 'None'}`, { parse_mode: 'Markdown' });
+        const banStatus = user.is_banned ? '⛔ BANNED' : '✅ Active'; // Show status
+        ctx.reply(`🆔 ID: \`${user.id}\`\n💰 Balance: **${user.balance}$**\n🔗 Referred By: ${user.referred_by || 'None'}\n\nStatus: ${banStatus}`, { parse_mode: 'Markdown' });
     } catch (e) {
         ctx.reply("❌ Error fetching profile data.");
         console.error(e);
     }
 });
 
+// --- UPDATED FEATURE: Add Fund Message ---
 bot.hears('💰 Add Fund', (ctx) => {
-    ctx.reply("To add funds, please contact the admin (ID: " + ADMIN_ID + ").");
+    const msg = `
+**💰 Fund Addition**
+
+To add funds to your account, please contact the administrator:
+
+👤 **Username:** @${ADMIN_USERNAME}
+🆔 **Chat ID:** \`${ADMIN_ID}\`
+
+Send them the payment details, and they will manually update your balance using the Chat ID above.
+    `;
+    ctx.replyWithMarkdown(msg);
 });
 
 bot.hears('🎁 Referral', async (ctx) => {
-    // Requires a bot username for the link to work correctly
+    const user = await db.getUser(ctx.from.id);
+    if (user.is_banned) return ctx.reply("⛔ Action denied. You are banned.");
+
     if (!ctx.botInfo.username) return ctx.reply("Error: Bot username not set.");
     const userId = ctx.from.id;
     const referralLink = `https://t.me/${ctx.botInfo.username}?start=ref_${userId}`; 
@@ -94,8 +121,11 @@ bot.hears('🎁 Referral', async (ctx) => {
 });
 
 bot.hears('📄 History', async (ctx) => {
+    const user = await db.getUser(ctx.from.id);
+    if (user.is_banned) return ctx.reply("⛔ Action denied. You are banned.");
+    
     try {
-        const history = await db.getPurchaseHistory(ctx.from.id, 5); // Show last 5
+        const history = await db.getPurchaseHistory(ctx.from.id, 5);
 
         if (history.length === 0) {
             return ctx.reply("You have no key purchase history yet.");
@@ -117,10 +147,18 @@ bot.hears('📄 History', async (ctx) => {
     }
 });
 
-// --- BUY FLOW ---
-bot.hears('🔑 Buy Key', (ctx) => ctx.reply("Select the Game:", gameSelectionKeyboard));
+// --- BUY FLOW (No Functional Change, added ban check) ---
+bot.hears('🔑 Buy Key', async (ctx) => {
+    const user = await db.getUser(ctx.from.id);
+    if (user.is_banned) return ctx.reply("⛔ Action denied. You are banned.");
+    ctx.reply("Select the Game:", gameSelectionKeyboard)
+});
+
 
 bot.action(/select_(.+)/, async (ctx) => {
+    const user = await db.getUser(ctx.from!.id);
+    if (user.is_banned) return ctx.answerCbQuery("⛔ Action denied. You are banned.", { show_alert: true });
+
     const game = ctx.match[1];
     await ctx.editMessageText(`Selected Game: **${game}**\nNow select duration:`, {
         parse_mode: 'Markdown',
@@ -138,6 +176,8 @@ bot.action(/buy_(.+)_(.+)/, async (ctx) => {
 
     try {
         const user = await db.getUser(userId);
+        if (user.is_banned) return ctx.answerCbQuery("⛔ Purchase denied. You are banned.", { show_alert: true });
+
         const stock = await db.getAvailableKeyCount(game, duration);
 
         if (stock <= 0) {
@@ -151,7 +191,6 @@ bot.action(/buy_(.+)_(.+)/, async (ctx) => {
             const key = await db.fetchAndMarkKey(game, duration);
 
             if (key) {
-                // Log the transaction
                 await db.logPurchase({
                     user_id: userId,
                     key_id: key.id,
@@ -163,7 +202,7 @@ bot.action(/buy_(.+)_(.+)/, async (ctx) => {
                 await ctx.replyWithMarkdown(`✅ **Purchase Successful!**\n\nGame: ${game}\nDuration: ${duration}\n\nKey:\n\`${key.content}\``);
                 ctx.answerCbQuery("Purchase successful!");
             } else {
-                await db.addBalance(userId, price); // Refund in case of critical stock error
+                await db.addBalance(userId, price); 
                 ctx.answerCbQuery("Error fetching key. Refunded.");
             }
         }
@@ -176,7 +215,102 @@ bot.action(/buy_(.+)_(.+)/, async (ctx) => {
 
 // --- ADMIN COMMANDS ---
 
-// Command: /addkey <game> <duration> <key_content>
+// --- NEW FEATURE: Admin Help Command ---
+bot.command('adminhelp', (ctx) => {
+    if (!isAdmin(ctx.from.id)) {
+        return ctx.reply("❌ Access denied. This command is for administrators only.");
+    }
+    
+    const adminHelpMessage = `
+👮 **ADMIN MENU COMMANDS**
+-------------------------------
+**Inventory Management:**
+/addkey <game> <duration> <key_content> - Add one key.
+*Send a **.txt file*** (\`game|duration|key\`) - Bulk add keys.
+/searchkey <key_content> - Search DB for status of a specific key. (NEW)
+
+**User Management:**
+/addbalance <user_id> <amount> - Add funds to a user.
+/ban <user_id> - Ban a user from using the bot. (NEW)
+/unban <user_id> - Unban a previously banned user. (NEW)
+
+    `;
+    ctx.replyWithMarkdown(adminHelpMessage);
+});
+
+
+// --- NEW FEATURE: Key Search Command ---
+bot.command('searchkey', async (ctx) => {
+    if (!isAdmin(ctx.from.id)) return;
+    const args = ctx.message.text.split(' ');
+    if (args.length < 2) return ctx.reply("Usage: /searchkey <key_content>");
+
+    const keyContent = args[1].trim();
+
+    try {
+        const key = await db.findKeyByContent(keyContent);
+
+        if (key) {
+            const status = key.used ? '🔴 USED' : '🟢 AVAILABLE';
+            const statusMsg = key.used ? `Used by User ID: (Need to implement tracking in purchase history query)` : `Available in stock.`;
+            
+            ctx.replyWithMarkdown(
+                `🔎 **Key Found!**\n` +
+                `ID: \`${key.id}\`\n` +
+                `Content: \`${key.content}\`\n` +
+                `Game: ${key.game}\n` +
+                `Duration: ${key.duration}\n` +
+                `Status: **${status}**`
+            );
+        } else {
+            ctx.reply(`❌ Key content \`${keyContent}\` not found in the database.`);
+        }
+    } catch (e) {
+        ctx.reply("❌ Error searching for key.");
+        console.error(e);
+    }
+});
+
+
+// --- NEW FEATURE: Ban/Unban Commands ---
+
+bot.command('ban', async (ctx) => {
+    if (!isAdmin(ctx.from.id)) return;
+    const args = ctx.message.text.split(' ');
+    if (args.length < 2) return ctx.reply("Usage: /ban <user_id>");
+
+    const targetId = parseInt(args[1]);
+
+    try {
+        await db.banUser(targetId, true);
+        ctx.reply(`✅ User ID ${targetId} has been **BANNED** and cannot make purchases.`);
+        ctx.telegram.sendMessage(targetId, "⛔ You have been banned from using this bot by the administrator.").catch(() => {});
+    } catch (e) {
+        ctx.reply(`❌ Error banning user ${targetId}.`);
+        console.error(e);
+    }
+});
+
+bot.command('unban', async (ctx) => {
+    if (!isAdmin(ctx.from.id)) return;
+    const args = ctx.message.text.split(' ');
+    if (args.length < 2) return ctx.reply("Usage: /unban <user_id>");
+
+    const targetId = parseInt(args[1]);
+
+    try {
+        await db.banUser(targetId, false);
+        ctx.reply(`✅ User ID ${targetId} has been **UNBANNED** and can resume bot usage.`);
+        ctx.telegram.sendMessage(targetId, "✅ You have been unbanned by the administrator.").catch(() => {});
+    } catch (e) {
+        ctx.reply(`❌ Error unbanning user ${targetId}.`);
+        console.error(e);
+    }
+});
+
+
+// --- Existing Admin Commands (Awaited) ---
+
 bot.command('addkey', async (ctx) => {
     if (!isAdmin(ctx.from.id)) return;
     const args = ctx.message.text.split(' ');
@@ -191,7 +325,6 @@ bot.command('addkey', async (ctx) => {
     }
 });
 
-// Command: /addbalance <user_id> <amount>
 bot.command('addbalance', async (ctx) => {
     if (!isAdmin(ctx.from.id)) return;
     const args = ctx.message.text.split(' ');
@@ -209,7 +342,6 @@ bot.command('addbalance', async (ctx) => {
     }
 });
 
-// Handler for Bulk Key Upload (.txt file)
 bot.on('document', async (ctx) => {
     if (!isAdmin(ctx.from.id)) return;
 
@@ -222,7 +354,6 @@ bot.on('document', async (ctx) => {
     const fileLink = await ctx.telegram.getFileLink(fileId);
 
     try {
-        // Use Node's built-in fetch if available, otherwise check dependencies
         const response = await fetch(fileLink.href); 
         const textContent = await response.text();
         const lines = textContent.split('\n').filter(line => line.trim() !== '');
@@ -235,7 +366,7 @@ bot.on('document', async (ctx) => {
             if (parts.length === 3) {
                 const [game, duration, content] = parts;
                 if (content.length > 5) {
-                    await db.addKey(game, duration, content); // Asynchronous DB call
+                    await db.addKey(game, duration, content);
                     keysAdded++;
                 } else {
                     errors++;
@@ -254,12 +385,9 @@ bot.on('document', async (ctx) => {
 });
 
 
-// --- VERCEL HANDLER ---
-// This exports the function that Vercel calls on every incoming Telegram message
+// --- VERCEL HANDLER (No Change) ---
 export default async (req: VercelRequest, res: VercelResponse) => {
-    // Only handle POST requests from Telegram
     if (req.method !== 'POST' || !req.body) {
-         // Respond quickly to non-Telegram requests (e.g., browser checks)
         res.status(200).send('OK'); 
         return;
     }
@@ -269,9 +397,6 @@ export default async (req: VercelRequest, res: VercelResponse) => {
         res.status(200).send('OK');
     } catch (e) {
         console.error('Webhook Error:', e);
-        // Important: Respond with 500 so Telegram retries the message, 
-        // but only if it's a critical error (which the Telegraf error handling 
-        // typically prevents). We will use 500 for general failure here.
         res.status(500).send('Error');
     }
 };

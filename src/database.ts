@@ -9,13 +9,13 @@ const supabase: SupabaseClient = createClient(
     process.env.SUPABASE_ANON_KEY || ''
 );
 
+// --- NEW SQL SCHEMA FOR USERS ---
+// ALTER TABLE users ADD COLUMN is_banned BOOLEAN DEFAULT FALSE;
+
 class SupabaseDatabase {
 
     // --- User Methods ---
 
-    /**
-     * Fetches a user or creates a new one if not found.
-     */
     async getUser(id: number): Promise<UserData> {
         const { data, error } = await supabase
             .from('users')
@@ -24,7 +24,7 @@ class SupabaseDatabase {
             .single();
 
         if (error && error.code === 'PGRST116') { // Not found
-            const newUserData: UserData = { id, balance: 0 };
+            const newUserData: UserData = { id, balance: 0, is_banned: false }; // ADDED is_banned
             const { data: newData, error: insertError } = await supabase
                 .from('users')
                 .insert([newUserData])
@@ -38,9 +38,6 @@ class SupabaseDatabase {
         return data as UserData;
     }
 
-    /**
-     * Updates only the balance or referred_by field.
-     */
     async updateUser(id: number, updates: Partial<UserData>): Promise<void> {
         const { error } = await supabase
             .from('users')
@@ -57,6 +54,7 @@ class SupabaseDatabase {
 
     async deductBalance(id: number, amount: number): Promise<boolean> {
         const user = await this.getUser(id);
+        if (user.is_banned) return false; // Block banned users
         if (user.balance >= amount) {
             const newBalance = user.balance - amount;
             await this.updateUser(id, { balance: newBalance });
@@ -64,9 +62,13 @@ class SupabaseDatabase {
         }
         return false;
     }
-    
-    // --- Purchase History Methods ---
 
+    // --- NEW: Ban/Unban Methods ---
+    async banUser(id: number, isBanned: boolean): Promise<void> {
+        await this.updateUser(id, { is_banned: isBanned });
+    }
+    
+    // --- Purchase History Methods (No Change) ---
     async logPurchase(record: Omit<PurchaseRecord, 'id' | 'timestamp'>): Promise<void> {
         const { error } = await supabase
             .from('purchase_history')
@@ -85,7 +87,7 @@ class SupabaseDatabase {
         if (error) throw error;
         return data as PurchaseRecord[];
     }
-
+    
     // --- Key Methods ---
 
     async addKey(game: string, duration: string, content: string): Promise<void> {
@@ -115,7 +117,6 @@ class SupabaseDatabase {
     }
 
     async fetchAndMarkKey(game: string, duration: string): Promise<Key | null> {
-        // 1. Fetch one unused key
         const { data: keyData, error: fetchError } = await supabase
             .from('keys')
             .select('*')
@@ -127,7 +128,6 @@ class SupabaseDatabase {
 
         if (fetchError || !keyData) return null;
 
-        // 2. Mark it as used
         const { error: updateError } = await supabase
             .from('keys')
             .update({ used: true })
@@ -138,8 +138,20 @@ class SupabaseDatabase {
         return keyData as Key;
     }
 
-    // --- Reporting ---
+    // --- NEW: Key Search Method ---
+    async findKeyByContent(content: string): Promise<Key | null> {
+        const { data, error } = await supabase
+            .from('keys')
+            .select('*')
+            .eq('content', content)
+            .limit(1)
+            .single();
+        
+        if (error || !data) return null;
+        return data as Key;
+    }
 
+    // --- Reporting (No Change) ---
     async getStockReport(): Promise<string> {
         const { data: keys, error } = await supabase
             .from('keys')

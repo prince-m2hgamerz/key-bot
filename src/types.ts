@@ -23,4 +23,5 @@ export interface UserData {
     balance: number;
     username?: string;
     referred_by?: number;
+    is_banned: boolean; // <--- NEW FIELD
 }
