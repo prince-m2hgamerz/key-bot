@@ -1,16 +1,23 @@
 // src/database.ts
 
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { UserData, KeyData, PurchaseData } from './types';
 
-const supabaseUrl = process.env.SUPABASE_URL || '';
-const supabaseKey = process.env.SUPABASE_KEY || '';
+// Use SUPABASE_ANON_KEY as requested
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_ANON_KEY; 
 
+// The critical environment check
 if (!supabaseUrl || !supabaseKey) {
-    throw new Error("SUPABASE_URL and SUPABASE_KEY environment variables must be set.");
+    // THROW ERROR HERE: This is where the execution stops if variables are missing on Vercel
+    throw new Error("SUPABASE_URL and SUPABASE_ANON_KEY environment variables must be set.");
 }
 
-const supabase = createClient(supabaseUrl, supabaseKey);
+// Declare Supabase client with the required types
+const supabase: SupabaseClient = createClient(
+    supabaseUrl,
+    supabaseKey
+);
 
 interface Game {
     name: string;
@@ -18,6 +25,8 @@ interface Game {
 
 export const db = {
     // --- User Management ---
+    
+    // ... (rest of the functions: getUser, addUser, addBalance, etc. remain unchanged) ...
 
     async getUser(id: number): Promise<UserData> {
         let { data, error } = await supabase
@@ -235,7 +244,7 @@ export const db = {
         return data as PurchaseData[];
     },
 
-    // --- NEW: Game Management Functions ---
+    // --- Game Management Functions ---
     
     async addGame(name: string): Promise<boolean> {
         const { error } = await supabase.from('games').insert({ name });
