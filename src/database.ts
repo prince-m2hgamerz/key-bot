@@ -1,108 +1,125 @@
 // src/database.ts
 
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { Key, UserData, PurchaseRecord } from './types';
+import { createClient } from '@supabase/supabase-js';
+import { UserData, KeyData, PurchaseData } from './types';
 
-// Initialize Supabase Client
-const supabase: SupabaseClient = createClient(
-    process.env.SUPABASE_URL || '',
-    process.env.SUPABASE_ANON_KEY || ''
-);
+const supabaseUrl = process.env.SUPABASE_URL || '';
+const supabaseKey = process.env.SUPABASE_KEY || '';
 
-// --- NEW SQL SCHEMA FOR USERS ---
-// ALTER TABLE users ADD COLUMN is_banned BOOLEAN DEFAULT FALSE;
+if (!supabaseUrl || !supabaseKey) {
+    throw new Error("SUPABASE_URL and SUPABASE_KEY environment variables must be set.");
+}
 
-class SupabaseDatabase {
+const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // --- User Methods ---
+interface Game {
+    name: string;
+}
+
+export const db = {
+    // --- User Management ---
 
     async getUser(id: number): Promise<UserData> {
-        const { data, error } = await supabase
+        let { data, error } = await supabase
             .from('users')
             .select('*')
             .eq('id', id)
             .single();
 
-        if (error && error.code === 'PGRST116') { // Not found
-            const newUserData: UserData = { id, balance: 0, is_banned: false }; // ADDED is_banned
-            const { data: newData, error: insertError } = await supabase
-                .from('users')
-                .insert([newUserData])
-                .select()
-                .single();
-            
-            if (insertError) throw insertError;
-            return newData as UserData;
+        if (error && error.code === 'PGRST116') { // No rows found
+            return await db.addUser(id);
         }
-        if (error) throw error;
+        if (error) {
+            console.error('Error fetching user:', error);
+            throw new Error('Database error fetching user.');
+        }
         return data as UserData;
-    }
+    },
+
+    async addUser(id: number): Promise<UserData> {
+        const newUser: Partial<UserData> = { id, balance: 0, is_banned: false };
+        const { data, error } = await supabase
+            .from('users')
+            .insert(newUser)
+            .select()
+            .single();
+
+        if (error) {
+            console.error('Error adding user:', error);
+            throw new Error('Database error adding user.');
+        }
+        return data as UserData;
+    },
 
     async updateUser(id: number, updates: Partial<UserData>): Promise<void> {
         const { error } = await supabase
             .from('users')
             .update(updates)
             .eq('id', id);
-        if (error) throw error;
-    }
+
+        if (error) {
+            console.error('Error updating user:', error);
+            throw new Error('Database error updating user.');
+        }
+    },
 
     async addBalance(id: number, amount: number): Promise<void> {
-        const user = await this.getUser(id);
+        const user = await db.getUser(id);
         const newBalance = user.balance + amount;
-        await this.updateUser(id, { balance: newBalance });
-    }
+
+        const { error } = await supabase
+            .from('users')
+            .update({ balance: newBalance })
+            .eq('id', id);
+
+        if (error) {
+            console.error('Error adding balance:', error);
+            throw new Error('Database error adding balance.');
+        }
+    },
 
     async deductBalance(id: number, amount: number): Promise<boolean> {
-        const user = await this.getUser(id);
-        if (user.is_banned) return false; // Block banned users
-        if (user.balance >= amount) {
-            const newBalance = user.balance - amount;
-            await this.updateUser(id, { balance: newBalance });
-            return true;
-        }
-        return false;
-    }
+        const user = await db.getUser(id);
+        if (user.balance < amount) return false;
 
-    // --- NEW: Ban/Unban Methods ---
-    async banUser(id: number, isBanned: boolean): Promise<void> {
-        await this.updateUser(id, { is_banned: isBanned });
-    }
-    
-    // --- Purchase History Methods (No Change) ---
-    async logPurchase(record: Omit<PurchaseRecord, 'id' | 'timestamp'>): Promise<void> {
-        const { error } = await supabase
-            .from('purchase_history')
-            .insert([record]);
-        if (error) throw error;
-    }
-
-    async getPurchaseHistory(userId: number, limit: number = 5): Promise<PurchaseRecord[]> {
-        const { data, error } = await supabase
-            .from('purchase_history')
-            .select('*')
-            .eq('user_id', userId)
-            .order('timestamp', { ascending: false })
-            .limit(limit);
+        const newBalance = user.balance - amount;
         
-        if (error) throw error;
-        return data as PurchaseRecord[];
-    }
-    
-    // --- Key Methods ---
+        const { error } = await supabase
+            .from('users')
+            .update({ balance: newBalance })
+            .eq('id', id);
 
+        if (error) {
+            console.error('Error deducting balance:', error);
+            throw new Error('Database error deducting balance.');
+        }
+        return true;
+    },
+
+    async banUser(id: number, is_banned: boolean): Promise<void> {
+        const { error } = await supabase
+            .from('users')
+            .update({ is_banned })
+            .eq('id', id);
+
+        if (error) {
+            console.error('Error setting ban status:', error);
+            throw new Error('Database error setting ban status.');
+        }
+    },
+
+    // --- Key Management ---
+    
     async addKey(game: string, duration: string, content: string): Promise<void> {
-        const key: Key = {
-            id: Math.random().toString(36).substr(2, 9),
-            content,
-            game,
-            duration,
-            used: false
-        };
         const { error } = await supabase
             .from('keys')
-            .insert([key]);
-        if (error) throw error;
-    }
+            .insert({ game, duration, content });
+        
+        if (error) {
+            console.error('Error adding key:', error);
+            throw new Error('Database error adding key.');
+        }
+    },
 
     async getAvailableKeyCount(game: string, duration: string): Promise<number> {
         const { count, error } = await supabase
@@ -112,72 +129,130 @@ class SupabaseDatabase {
             .eq('duration', duration)
             .eq('used', false);
         
-        if (error) throw error;
+        if (error) {
+            console.error('Error counting keys:', error);
+            return 0;
+        }
         return count || 0;
-    }
+    },
 
-    async fetchAndMarkKey(game: string, duration: string): Promise<Key | null> {
-        const { data: keyData, error: fetchError } = await supabase
+    async getStockReport(): Promise<string> {
+        const { data, error } = await supabase
+            .from('keys')
+            .select('game, duration', { count: 'exact' })
+            .eq('used', false);
+
+        if (error) {
+            console.error('Error fetching stock report:', error);
+            return "Error retrieving stock data.";
+        }
+
+        const counts: Record<string, number> = {};
+        if (data) {
+            data.forEach(key => {
+                const keyString = `${key.game} (${key.duration})`;
+                counts[keyString] = (counts[keyString] || 0) + 1;
+            });
+        }
+
+        let report = '📦 **Current Key Stock:**\n';
+        for (const key in counts) {
+            report += `\n- ${key}: \`${counts[key]}\``;
+        }
+        return report;
+    },
+
+    async fetchAndMarkKey(game: string, duration: string): Promise<KeyData | null> {
+        // 1. Fetch one available key
+        let { data: keys, error: fetchError } = await supabase
             .from('keys')
             .select('*')
             .eq('game', game)
             .eq('duration', duration)
             .eq('used', false)
-            .limit(1)
-            .single();
+            .limit(1);
 
-        if (fetchError || !keyData) return null;
+        if (fetchError || !keys || keys.length === 0) {
+            return null;
+        }
 
+        const key = keys[0];
+
+        // 2. Mark the key as used
         const { error: updateError } = await supabase
             .from('keys')
             .update({ used: true })
-            .eq('id', keyData.id);
+            .eq('id', key.id);
 
-        if (updateError) throw updateError;
-        
-        return keyData as Key;
-    }
+        if (updateError) {
+            console.error('Error marking key as used:', updateError);
+            return null;
+        }
 
-    // --- NEW: Key Search Method ---
-    async findKeyByContent(content: string): Promise<Key | null> {
+        return key as KeyData;
+    },
+
+    async findKeyByContent(content: string): Promise<KeyData | null> {
         const { data, error } = await supabase
             .from('keys')
             .select('*')
             .eq('content', content)
-            .limit(1)
             .single();
-        
-        if (error || !data) return null;
-        return data as Key;
-    }
 
-    // --- Reporting (No Change) ---
-    async getStockReport(): Promise<string> {
-        const { data: keys, error } = await supabase
-            .from('keys')
-            .select('game, duration, used');
-        
-        if (error) throw error;
-
-        const stockMap = new Map<string, number>();
-
-        (keys as Pick<Key, 'game'|'duration'|'used'>[]).forEach(key => {
-            if (!key.used) {
-                const keyId = `${key.game}:${key.duration}`;
-                stockMap.set(keyId, (stockMap.get(keyId) || 0) + 1);
-            }
-        });
-
-        if (stockMap.size === 0) return "No keys initialized or all are used.";
-
-        let report = "Stock:\n";
-        
-        for (const [keyId, count] of stockMap.entries()) {
-            const [game, dur] = keyId.split(':');
-            report += `\n**${game}** (${dur}): ${count} keys\n`;
+        if (error && error.code === 'PGRST116') return null; // Not found
+        if (error) {
+            console.error('Error searching key:', error);
+            throw new Error('Database error searching key.');
         }
-        return report;
-    }
-}
+        return data as KeyData;
+    },
 
-export const db = new SupabaseDatabase();
+    // --- Purchase History ---
+    
+    async logPurchase(purchase: Omit<PurchaseData, 'id' | 'timestamp'>): Promise<void> {
+        const { error } = await supabase
+            .from('purchases')
+            .insert(purchase);
+
+        if (error) {
+            console.error('Error logging purchase:', error);
+            throw new Error('Database error logging purchase.');
+        }
+    },
+
+    async getPurchaseHistory(userId: number, limit: number = 5): Promise<PurchaseData[]> {
+        const { data, error } = await supabase
+            .from('purchases')
+            .select('*')
+            .eq('user_id', userId)
+            .order('timestamp', { ascending: false })
+            .limit(limit);
+
+        if (error) {
+            console.error('Error fetching history:', error);
+            return [];
+        }
+        return data as PurchaseData[];
+    },
+
+    // --- NEW: Game Management Functions ---
+    
+    async addGame(name: string): Promise<boolean> {
+        const { error } = await supabase.from('games').insert({ name });
+        // Error code '23505' means duplicate key (game already exists)
+        if (error && error.code !== '23505') { 
+            console.error('Error adding game:', error);
+            return false;
+        }
+        return !error || error.code === '23505';
+    },
+
+    async getGameList(): Promise<Game[]> {
+        const { data, error } = await supabase.from('games').select('name');
+        if (error) {
+            console.error('Error fetching game list:', error);
+            return [];
+        }
+        return (data as Game[]) || [];
+    },
+};

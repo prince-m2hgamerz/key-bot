@@ -23,7 +23,7 @@ const isAdmin = (id: number) => id === ADMIN_ID;
 
 /**
  * Escapes Markdown V2 characters in a string to prevent "Can't parse entities" errors,
- * especially when displaying user-provided content like keys in non-code-block areas.
+ * for content that is NOT inside a code block.
  */
 const escapeMarkdown = (text: string): string => {
     return text
@@ -94,7 +94,6 @@ bot.hears('❓ User Help', async (ctx) => {
     const user = await db.getUser(ctx.from.id);
     if (user.is_banned) return ctx.reply("⛔ Action denied. You are banned.");
 
-    // This section is Markdown and confirmed working
     const helpMessage = 
 `**🤖 User Help & Information**
 
@@ -112,9 +111,8 @@ If you have technical issues, please contact the admin via the 'Add Fund' option
 
 // --- FIXED: Add Fund Button Handler (Plain Text & Correct Content) ---
 bot.hears('💰 Add Fund', (ctx) => {
-    const userId = ctx.from.id; // User's ID is required for the Admin to apply the credit
+    const userId = ctx.from.id; 
 
-    // FIX: Switched to ctx.reply() and simplified content to avoid 400 error and confusion
     const msg = 
 `Fund Addition
 
@@ -125,7 +123,7 @@ Username: @${ADMIN_USERNAME}
 Send them the payment details and your Chat ID (which is: ${userId}).
 The administrator will manually update your balance using your Chat ID.`;
     
-    ctx.reply(msg); // Keeping ctx.reply() to avoid the 400 Markdown error.
+    ctx.reply(msg); // Using ctx.reply() to avoid the 400 Markdown error.
 });
 
 bot.hears('📦 Key Stock', async (ctx) => {
@@ -191,11 +189,17 @@ bot.hears('📄 History', async (ctx) => {
     }
 });
 
-// --- BUY FLOW ---
+// --- BUY FLOW (UPDATED) ---
 bot.hears('🔑 Buy Key', async (ctx) => {
     const user = await db.getUser(ctx.from.id);
     if (user.is_banned) return ctx.reply("⛔ Action denied. You are banned.");
-    ctx.reply("Select the Game:", gameSelectionKeyboard)
+    
+    const games = await db.getGameList();
+    if (games.length === 0) {
+        return ctx.reply("❌ No games are currently available. Please check back later or contact admin.");
+    }
+    
+    ctx.reply("Select the Game:", gameSelectionKeyboard(games));
 });
 
 bot.action(/select_(.+)/, async (ctx) => {
@@ -242,7 +246,7 @@ bot.action(/buy_(.+)_(.+)/, async (ctx) => {
                     price: price
                 });
 
-                // --- FIX APPLIED HERE: Do NOT escape key.content, as it is inside code block ticks ---
+                // FIX: Do NOT escape key content inside the code block
                 const keyContent = key.content; 
                 
                 await ctx.replyWithMarkdown(`✅ **Purchase Successful!**\n\nGame: ${game}\nDuration: ${duration}\n\nKey:\n\`${keyContent}\``);
@@ -261,20 +265,22 @@ bot.action(/buy_(.+)_(.+)/, async (ctx) => {
 
 // --- ADMIN COMMANDS ---
 
-// --- Admin Help Command Handler ---
+// --- Admin Help Command Handler (UPDATED) ---
 bot.command('adminhelp', (ctx) => {
     if (!isAdmin(ctx.from.id)) {
         return ctx.reply("❌ Access denied. This command is for administrators only.");
     }
     
-    // Confirmed working
     const adminHelpMessage = 
 `👮 **ADMIN MENU COMMANDS**
 
 **Inventory Management:**
+/addgame <game\\_name>
 /addkey <game> <duration> <key\\_content>
+/addbulkkey <game> <duration> <key1>,<key2>,<key3>
 _Bulk Upload:_ Send a *.txt file* (\`game|duration|key\`)
 /searchkey <key\\_content>
+/games - List all available games
 
 **User Management:**
 /addbalance <user\\_id> <amount>
@@ -282,6 +288,75 @@ _Bulk Upload:_ Send a *.txt file* (\`game|duration|key\`)
 /unban <user\\_id>`;
     
     ctx.replyWithMarkdown(adminHelpMessage, adminMenu);
+});
+
+// --- NEW: Add Game Command ---
+bot.command('addgame', async (ctx) => {
+    if (!isAdmin(ctx.from.id)) return;
+    const parts = ctx.message.text.split(' ');
+    if (parts.length < 2) return ctx.reply("Usage: /addgame <game_name>");
+
+    const gameName = parts.slice(1).join(' ').trim();
+
+    try {
+        if (await db.addGame(gameName)) {
+            ctx.reply(`✅ Game **${gameName}** added to the list.`);
+        } else {
+            ctx.reply(`❌ Failed to add game **${gameName}**. It might already exist.`);
+        }
+    } catch (e) {
+        ctx.reply("❌ Error processing command.");
+        console.error(e);
+    }
+});
+
+// --- NEW: List Games Command ---
+bot.command('games', async (ctx) => {
+    if (!isAdmin(ctx.from.id)) return;
+
+    try {
+        const games = await db.getGameList();
+        if (games.length === 0) {
+            return ctx.reply("No games currently configured. Use /addgame to start.");
+        }
+
+        const gameList = games.map((g, index) => `${index + 1}. ${g.name}`).join('\n');
+        
+        ctx.replyWithMarkdown(`🎮 **Available Games List:**\n\n${gameList}`);
+    } catch (e) {
+        ctx.reply("❌ Error fetching game list.");
+        console.error(e);
+    }
+});
+
+// --- NEW: Add Bulk Key Command (String Separated) ---
+bot.command('addbulkkey', async (ctx) => {
+    if (!isAdmin(ctx.from.id)) return;
+    const parts = ctx.message.text.split(' ');
+    if (parts.length < 4) return ctx.reply("Usage: /addbulkkey <game> <duration> <key1>,<key2>,<key3>");
+
+    const game = parts[1];
+    const duration = parts[2];
+    const keysString = parts.slice(3).join(' '); 
+    
+    const keys = keysString.split(',').map(k => k.trim()).filter(k => k.length > 5);
+
+    if (keys.length === 0) {
+        return ctx.reply("❌ No valid keys found in the input string. Keys should be separated by commas and be longer than 5 characters.");
+    }
+
+    let addedCount = 0;
+    try {
+        for (const key of keys) {
+            await db.addKey(game, duration, key);
+            addedCount++;
+        }
+        
+        ctx.reply(`✅ Added **${addedCount}** keys for **${game}** (${duration}).`);
+    } catch (e) {
+        ctx.reply("❌ Error adding keys to DB.");
+        console.error(e);
+    }
 });
 
 
@@ -298,7 +373,6 @@ bot.command('searchkey', async (ctx) => {
 
         if (key) {
             const status = key.used ? '🔴 USED' : '🟢 AVAILABLE';
-            // Escaping is required here because the key is NOT inside a code block
             const safeKeyContent = escapeMarkdown(key.content); 
 
             ctx.replyWithMarkdown(
@@ -320,7 +394,7 @@ bot.command('searchkey', async (ctx) => {
 });
 
 
-// --- Ban/Unban Commands ---
+// --- Ban/Unban Commands (Unchanged) ---
 bot.command('ban', async (ctx) => {
     if (!isAdmin(ctx.from.id)) return;
     const args = ctx.message.text.split(' ');
@@ -356,7 +430,7 @@ bot.command('unban', async (ctx) => {
 });
 
 
-// --- Existing Admin Commands ---
+// --- Existing Admin Commands (Unchanged) ---
 bot.command('addkey', async (ctx) => {
     if (!isAdmin(ctx.from.id)) return;
     const parts = ctx.message.text.split(' ');
@@ -437,7 +511,7 @@ bot.on('document', async (ctx) => {
 });
 
 
-// --- VERCEL HANDLER ---
+// --- VERCEL HANDLER (Unchanged) ---
 export default async (req: VercelRequest, res: VercelResponse) => {
     if (req.method !== 'POST' || !req.body) {
         res.status(200).send('OK'); 

@@ -21,21 +21,22 @@ export const PRICES: Record<string, number> = {
 export const mainMenu = Markup.keyboard([
     ['🔑 Buy Key', '📦 Key Stock', '📄 History'],
     ['💰 Add Fund', '👤 Profile', '🎁 Referral'],
-    ['❓ User Help'] // <-- RENAMED
+    ['❓ User Help'] 
 ]).resize();
 
-// Admin Menu uses the same layout but has access to /adminhelp command
 export const adminMenu = Markup.keyboard([
     ['🔑 Buy Key', '📦 Key Stock', '📄 History'],
     ['💰 Add Fund', '👤 Profile', '🎁 Referral'],
-    ['/adminhelp'] // <-- NEW BUTTON TRIGGERING THE COMMAND
+    ['/adminhelp', '/games'] 
 ]).resize();
 
-export const gameSelectionKeyboard = Markup.inlineKeyboard([
-    [Markup.button.callback('8 Ball Pool (8BP)', 'select_8BP')],
-    [Markup.button.callback('Carrom', 'select_Carrom')],
-    [Markup.button.callback('PUBG', 'select_PUBG')]
-]);
+// Dynamic Game Selection Keyboard Function (Receives list from DB)
+export const gameSelectionKeyboard = (gameList: { name: string }[]) => {
+    const buttons = gameList.map(game => 
+        [Markup.button.callback(game.name, `select_${game.name}`)]
+    );
+    return Markup.inlineKeyboard(buttons);
+};
 
 export const durationKeyboard = (game: string) => Markup.inlineKeyboard([
     [Markup.button.callback(`1 Day (${PRICES['1-day']}$)`, `buy_${game}_1-day`)],

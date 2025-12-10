@@ -1,27 +1,28 @@
 // src/types.ts
 
-export interface Key {
+export interface UserData {
+    id: number;
+    username: string | null;
+    first_name: string | null;
+    balance: number;
+    referred_by: number | null;
+    is_banned: boolean;
+}
+
+export interface KeyData {
     id: string;
-    content: string;
     game: string;
     duration: string;
+    content: string;
     used: boolean;
 }
 
-export interface PurchaseRecord {
-    id?: number;
+export interface PurchaseData {
+    id: string;
     user_id: number;
     key_id: string;
     game: string;
     duration: string;
     price: number;
-    timestamp?: string; // Supabase returns a string
-}
-
-export interface UserData {
-    id: number;
-    balance: number;
-    username?: string;
-    referred_by?: number;
-    is_banned: boolean; // <--- NEW FIELD
+    timestamp: string;
 }
