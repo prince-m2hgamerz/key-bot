@@ -94,7 +94,7 @@ bot.hears('❓ User Help', async (ctx) => {
     const user = await db.getUser(ctx.from.id);
     if (user.is_banned) return ctx.reply("⛔ Action denied. You are banned.");
 
-    // Fixed message format for Markdown safety
+    // This section remains Markdown as it is confirmed working and is purely bot-generated
     const helpMessage = 
 `**🤖 User Help & Information**
 
@@ -110,12 +110,20 @@ If you have technical issues, please contact the admin via the 'Add Fund' option
     ctx.replyWithMarkdown(helpMessage, mainMenu);
 });
 
-// --- FINAL FIX: Add Fund Button Handler ---
+// --- FINAL FIX: Add Fund Button Handler (Switched to Plain Text) ---
 bot.hears('💰 Add Fund', (ctx) => {
-    // FIXED: Using a simplified, single-line-style structure for maximum Markdown compatibility.
-    const msg = `**💰 Fund Addition**\n\nTo add funds to your account, please contact the administrator:\n\n👤 *Username*: @${ADMIN_USERNAME}\n🆔 *Chat ID*: \`${ADMIN_ID}\`\n\nSend them the payment details, and they will manually update your balance using the Chat ID above.`;
+    // FIX: Switched to ctx.reply() to send PLAIN TEXT, completely bypassing the Markdown parser.
+    const msg = 
+`Fund Addition
+
+To add funds to your account, please contact the administrator:
+
+Username: @${ADMIN_USERNAME}
+Chat ID: ${ADMIN_ID}
+
+Send them the payment details, and they will manually update your balance using the Chat ID above.`;
     
-    ctx.replyWithMarkdown(msg);
+    ctx.reply(msg); // <--- Key Change: Using ctx.reply
 });
 
 bot.hears('📦 Key Stock', async (ctx) => {
@@ -250,13 +258,13 @@ bot.action(/buy_(.+)_(.+)/, async (ctx) => {
 
 // --- ADMIN COMMANDS ---
 
-// --- Admin Help Command Handler (Only Admin Access) ---
+// --- Admin Help Command Handler (Confirmed working, keeping Markdown) ---
 bot.command('adminhelp', (ctx) => {
     if (!isAdmin(ctx.from.id)) {
         return ctx.reply("❌ Access denied. This command is for administrators only.");
     }
     
-    // Fixed message format for Markdown safety
+    // Confirmed working
     const adminHelpMessage = 
 `👮 **ADMIN MENU COMMANDS**
 
@@ -428,13 +436,13 @@ bot.on('document', async (ctx) => {
 // --- VERCEL HANDLER ---
 export default async (req: VercelRequest, res: VercelResponse) => {
     if (req.method !== 'POST' || !req.body) {
-        res.status(200).send('ALL SERVERS ARE LIVE | DEV : @m2hgamerz'); 
+        res.status(200).send('OK'); 
         return;
     }
     
     try {
         await bot.handleUpdate(req.body);
-        res.status(200).send('ALL SERVERS ARE LIVE | DEV : @m2hgamerz');
+        res.status(200).send('OK');
     } catch (e) {
         console.error('Webhook Error:', e);
         res.status(500).send('Error');
