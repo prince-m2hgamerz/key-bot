@@ -514,13 +514,13 @@ bot.on('document', async (ctx) => {
 // --- VERCEL HANDLER (Unchanged) ---
 export default async (req: VercelRequest, res: VercelResponse) => {
     if (req.method !== 'POST' || !req.body) {
-        res.status(200).send('OK'); 
+        res.status(200).send('ALL SERVERS ARE LIVE & WORKING | DEVELOPER : @m2hgamerz'); 
         return;
     }
     
     try {
         await bot.handleUpdate(req.body);
-        res.status(200).send('OK');
+        res.status(200).send('ALL SERVERS ARE LIVE & WORKING | DEVELOPER : @m2hgamerz');
     } catch (e) {
         console.error('Webhook Error:', e);
         res.status(500).send('Error');

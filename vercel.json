@@ -1,26 +1,12 @@
 {
   "version": 2,
   "builds": [
-    { 
-      "src": "api/bot.ts", 
-      "use": "@vercel/node" 
-    }
+    { "src": "api/bot.ts", "use": "@vercel/node" }
   ],
   "routes": [
-    { 
-      "src": "/", 
-      "dest": "/index.html" 
-    },
-    { 
-      "src": "/api/bot", 
-      "dest": "api/bot.ts" 
-    },
-    { 
-      "src": "/(.*)", 
-      "dest": "/$1" 
-    }
+    { "src": "/(.*)", "dest": "api/bot.ts" }
   ],
   "env": {
-    "DATABASE_PATH": "data/db.json" 
+    "DATABASE_PATH": "data/db.json"
   }
 }
