@@ -5,21 +5,47 @@ import { VercelRequest, VercelResponse } from '@vercel/node';
 import { db } from '../src/database';
 import { 
     ADMIN_ID, 
-    ADMIN_USERNAME, // <--- NEW
+    ADMIN_USERNAME, 
     PRICES, 
     REFERRAL_BONUS,
     mainMenu, 
+    adminMenu, 
     gameSelectionKeyboard, 
     durationKeyboard 
 } from '../src/config';
 import { UserData } from '../src/types';
 
-// The bot instance is initialized with the token from environment variables
 const BOT_TOKEN = process.env.BOT_TOKEN || '';
 const bot = new Telegraf(BOT_TOKEN);
 
 // --- Middleware/Helper ---
 const isAdmin = (id: number) => id === ADMIN_ID;
+
+/**
+ * Escapes Markdown V2 characters in a string to prevent "Can't parse entities" errors.
+ */
+const escapeMarkdown = (text: string): string => {
+    return text
+        .replace(/_/g, '\\_')
+        .replace(/\*/g, '\\*')
+        .replace(/\[/g, '\\[')
+        .replace(/\]/g, '\\]')
+        .replace(/\(/g, '\\(')
+        .replace(/\)/g, '\\)')
+        .replace(/~/g, '\\~')
+        .replace(/`/g, '\\`')
+        .replace(/>/g, '\\>')
+        .replace(/#/g, '\\#')
+        .replace(/\+/g, '\\+')
+        .replace(/-/g, '\\-')
+        .replace(/=/g, '\\=')
+        .replace(/\|/g, '\\|')
+        .replace(/\{/g, '\\{')
+        .replace(/\}/g, '\\}')
+        .replace(/\./g, '\\.')
+        .replace(/!/g, '\\!');
+};
+
 
 // --- COMMANDS (User Features) ---
 
@@ -27,15 +53,16 @@ bot.start(async (ctx) => {
     const userId = ctx.from.id;
     const user = await db.getUser(userId); 
 
-    if (user.is_banned) { // Check ban status on start
+    if (user.is_banned) {
         return ctx.reply("⛔ You have been banned from using this bot.");
     }
     
-    // Referral Check (Deep-linking: /start ref_123456)
+    // Referral Check (Logic remains the same)
     const message = ctx.message.text;
     const match = message.match(/\/start ref_(\d+)/);
     
     if (match) {
+        // ... [Referral processing logic] ...
         const referrerId = parseInt(match[1]);
         if (referrerId !== userId && (user.referred_by === undefined || user.referred_by === null)) { 
             await db.addBalance(referrerId, REFERRAL_BONUS);
@@ -48,14 +75,28 @@ bot.start(async (ctx) => {
             return;
         }
     }
-
-    ctx.reply(`Welcome ${ctx.from.first_name}! Use the buttons below to manage keys.`, mainMenu);
+    
+    // Check if the user is the admin and set the correct menu
+    const menu = isAdmin(userId) ? adminMenu : mainMenu;
+    ctx.reply(`Welcome ${ctx.from.first_name}! Use the buttons below to manage keys.`, menu);
 });
 
-// --- NEW FEATURE: Help Button ---
-bot.hears('❓ Help', (ctx) => {
+// --- NEW COMMAND: /admin (Switches to Admin Keyboard) ---
+bot.command('admin', (ctx) => {
+    if (isAdmin(ctx.from.id)) {
+        ctx.reply("Switched to Admin Menu. Use the '/adminhelp' button for commands.", adminMenu);
+    } else {
+        ctx.reply("❌ Access denied.");
+    }
+});
+
+// --- UPDATED: User Help Button Handler ---
+bot.hears('❓ User Help', async (ctx) => {
+    const user = await db.getUser(ctx.from.id);
+    if (user.is_banned) return ctx.reply("⛔ Action denied. You are banned.");
+
     const helpMessage = `
-**Bot Help & Information**
+**🤖 User Help & Information**
 
 🔑 **Buy Key**: Browse available games and key durations.
 📦 **Key Stock**: See the current count of all available keys.
@@ -64,7 +105,7 @@ bot.hears('❓ Help', (ctx) => {
 👤 **Profile**: View your ID, Balance, and Referral status.
 🎁 **Referral**: Get your link to earn bonuses by inviting new users.
 
-If you have technical issues, please contact the admin.
+If you have technical issues, please contact the admin via the 'Add Fund' option.
     `;
     ctx.replyWithMarkdown(helpMessage, mainMenu);
 });
@@ -86,7 +127,7 @@ bot.hears('📦 Key Stock', async (ctx) => {
 bot.hears('👤 Profile', async (ctx) => {
     try {
         const user = await db.getUser(ctx.from.id);
-        const banStatus = user.is_banned ? '⛔ BANNED' : '✅ Active'; // Show status
+        const banStatus = user.is_banned ? '⛔ BANNED' : '✅ Active'; 
         ctx.reply(`🆔 ID: \`${user.id}\`\n💰 Balance: **${user.balance}$**\n🔗 Referred By: ${user.referred_by || 'None'}\n\nStatus: ${banStatus}`, { parse_mode: 'Markdown' });
     } catch (e) {
         ctx.reply("❌ Error fetching profile data.");
@@ -94,7 +135,7 @@ bot.hears('👤 Profile', async (ctx) => {
     }
 });
 
-// --- UPDATED FEATURE: Add Fund Message ---
+// --- UPDATED FEATURE: Add Fund Message (No Change, already fixed) ---
 bot.hears('💰 Add Fund', (ctx) => {
     const msg = `
 **💰 Fund Addition**
@@ -147,13 +188,12 @@ bot.hears('📄 History', async (ctx) => {
     }
 });
 
-// --- BUY FLOW (No Functional Change, added ban check) ---
+// --- BUY FLOW (No Functional Change, includes ban check) ---
 bot.hears('🔑 Buy Key', async (ctx) => {
     const user = await db.getUser(ctx.from.id);
     if (user.is_banned) return ctx.reply("⛔ Action denied. You are banned.");
     ctx.reply("Select the Game:", gameSelectionKeyboard)
 });
-
 
 bot.action(/select_(.+)/, async (ctx) => {
     const user = await db.getUser(ctx.from!.id);
@@ -178,6 +218,7 @@ bot.action(/buy_(.+)_(.+)/, async (ctx) => {
         const user = await db.getUser(userId);
         if (user.is_banned) return ctx.answerCbQuery("⛔ Purchase denied. You are banned.", { show_alert: true });
 
+        // ... [Balance and Stock checks] ...
         const stock = await db.getAvailableKeyCount(game, duration);
 
         if (stock <= 0) {
@@ -199,7 +240,9 @@ bot.action(/buy_(.+)_(.+)/, async (ctx) => {
                     price: price
                 });
 
-                await ctx.replyWithMarkdown(`✅ **Purchase Successful!**\n\nGame: ${game}\nDuration: ${duration}\n\nKey:\n\`${key.content}\``);
+                const safeKeyContent = escapeMarkdown(key.content);
+                
+                await ctx.replyWithMarkdown(`✅ **Purchase Successful!**\n\nGame: ${game}\nDuration: ${duration}\n\nKey:\n\`${safeKeyContent}\``);
                 ctx.answerCbQuery("Purchase successful!");
             } else {
                 await db.addBalance(userId, price); 
@@ -215,7 +258,7 @@ bot.action(/buy_(.+)_(.+)/, async (ctx) => {
 
 // --- ADMIN COMMANDS ---
 
-// --- NEW FEATURE: Admin Help Command ---
+// --- FIXED: Admin Help Command Handler (Only Admin Access) ---
 bot.command('adminhelp', (ctx) => {
     if (!isAdmin(ctx.from.id)) {
         return ctx.reply("❌ Access denied. This command is for administrators only.");
@@ -225,45 +268,45 @@ bot.command('adminhelp', (ctx) => {
 👮 **ADMIN MENU COMMANDS**
 -------------------------------
 **Inventory Management:**
-/addkey <game> <duration> <key_content> - Add one key.
+/addkey <game> <duration> <key\_content> - Add one key.
 *Send a **.txt file*** (\`game|duration|key\`) - Bulk add keys.
-/searchkey <key_content> - Search DB for status of a specific key. (NEW)
+/searchkey <key\_content> - Search DB for status of a specific key. 
 
 **User Management:**
-/addbalance <user_id> <amount> - Add funds to a user.
-/ban <user_id> - Ban a user from using the bot. (NEW)
-/unban <user_id> - Unban a previously banned user. (NEW)
-
+/addbalance <user\_id> <amount> - Add funds to a user.
+/ban <user\_id> - Ban a user from using the bot.
+/unban <user\_id> - Unban a previously banned user.
     `;
-    ctx.replyWithMarkdown(adminHelpMessage);
+    ctx.replyWithMarkdown(adminHelpMessage, adminMenu);
 });
 
 
-// --- NEW FEATURE: Key Search Command ---
+// --- Key Search Command ---
 bot.command('searchkey', async (ctx) => {
     if (!isAdmin(ctx.from.id)) return;
     const args = ctx.message.text.split(' ');
     if (args.length < 2) return ctx.reply("Usage: /searchkey <key_content>");
 
-    const keyContent = args[1].trim();
+    const keyContent = args.slice(1).join(' ').trim();
 
     try {
         const key = await db.findKeyByContent(keyContent);
 
         if (key) {
             const status = key.used ? '🔴 USED' : '🟢 AVAILABLE';
-            const statusMsg = key.used ? `Used by User ID: (Need to implement tracking in purchase history query)` : `Available in stock.`;
-            
+            const safeKeyContent = escapeMarkdown(key.content);
+
             ctx.replyWithMarkdown(
                 `🔎 **Key Found!**\n` +
                 `ID: \`${key.id}\`\n` +
-                `Content: \`${key.content}\`\n` +
+                `Content: \`${safeKeyContent}\`\n` + 
                 `Game: ${key.game}\n` +
                 `Duration: ${key.duration}\n` +
                 `Status: **${status}**`
             );
         } else {
-            ctx.reply(`❌ Key content \`${keyContent}\` not found in the database.`);
+            const safeKeyContent = escapeMarkdown(keyContent);
+            ctx.reply(`❌ Key content \`${safeKeyContent}\` not found in the database.`, { parse_mode: 'Markdown' });
         }
     } catch (e) {
         ctx.reply("❌ Error searching for key.");
@@ -272,8 +315,7 @@ bot.command('searchkey', async (ctx) => {
 });
 
 
-// --- NEW FEATURE: Ban/Unban Commands ---
-
+// --- Ban/Unban Commands ---
 bot.command('ban', async (ctx) => {
     if (!isAdmin(ctx.from.id)) return;
     const args = ctx.message.text.split(' ');
@@ -309,16 +351,21 @@ bot.command('unban', async (ctx) => {
 });
 
 
-// --- Existing Admin Commands (Awaited) ---
-
+// --- Existing Admin Commands ---
 bot.command('addkey', async (ctx) => {
     if (!isAdmin(ctx.from.id)) return;
-    const args = ctx.message.text.split(' ');
-    if (args.length < 4) return ctx.reply("Usage: /addkey <game> <duration> <key_content>");
+    const parts = ctx.message.text.split(' ');
+    if (parts.length < 4) return ctx.reply("Usage: /addkey <game> <duration> <key_content>");
+
+    const game = parts[1];
+    const duration = parts[2];
+    const content = parts.slice(3).join(' '); 
 
     try {
-        await db.addKey(args[1], args[2], args[3]);
-        ctx.reply(`✅ Added ${args[2]} key for ${args[1]}.`);
+        await db.addKey(game, duration, content);
+        const safeContent = escapeMarkdown(content);
+        
+        ctx.replyWithMarkdown(`✅ Added **${duration}** key for **${game}**.\nContent: \`${safeContent}\``);
     } catch (e) {
         ctx.reply("❌ Error adding key to DB.");
         console.error(e);
@@ -366,7 +413,7 @@ bot.on('document', async (ctx) => {
             if (parts.length === 3) {
                 const [game, duration, content] = parts;
                 if (content.length > 5) {
-                    await db.addKey(game, duration, content);
+                    await db.addKey(game, duration, content); 
                     keysAdded++;
                 } else {
                     errors++;
@@ -385,7 +432,7 @@ bot.on('document', async (ctx) => {
 });
 
 
-// --- VERCEL HANDLER (No Change) ---
+// --- VERCEL HANDLER ---
 export default async (req: VercelRequest, res: VercelResponse) => {
     if (req.method !== 'POST' || !req.body) {
         res.status(200).send('OK'); 

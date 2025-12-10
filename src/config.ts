@@ -4,10 +4,10 @@ import { Markup } from 'telegraf';
 import * as dotenv from 'dotenv';
 dotenv.config();
 
-export const REFERRAL_BONUS = 50; // $50 bonus for the referrer
+export const REFERRAL_BONUS = 50; 
 
 export const ADMIN_ID = parseInt(process.env.ADMIN_ID || '0');
-export const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin_user'; // ADD THIS LINE (Must be set in .env)
+export const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin_user'; 
 
 export const PRICES: Record<string, number> = {
     '1-day': 100,
@@ -21,7 +21,14 @@ export const PRICES: Record<string, number> = {
 export const mainMenu = Markup.keyboard([
     ['🔑 Buy Key', '📦 Key Stock', '📄 History'],
     ['💰 Add Fund', '👤 Profile', '🎁 Referral'],
-    ['❓ Help'] // <--- NEW BUTTON
+    ['❓ User Help'] // <-- RENAMED
+]).resize();
+
+// Admin Menu uses the same layout but has access to /adminhelp command
+export const adminMenu = Markup.keyboard([
+    ['🔑 Buy Key', '📦 Key Stock', '📄 History'],
+    ['💰 Add Fund', '👤 Profile', '🎁 Referral'],
+    ['/adminhelp'] // <-- NEW BUTTON TRIGGERING THE COMMAND
 ]).resize();
 
 export const gameSelectionKeyboard = Markup.inlineKeyboard([
